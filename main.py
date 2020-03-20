@@ -27,6 +27,7 @@ cogs = [
     "cogs.admin",
     "cogs.planner",
     "cogs.help",
+    "cogs.misc",
 ]
 
 # Global check
@@ -74,7 +75,7 @@ async def on_guild_join(guild):
     conn.query("INSERT INTO settings VALUES('prefix', '~')")
     conn.query("CREATE TABLE worlds(gameId INTEGER PRIMARY KEY AUTOINCREMENT, gameOwner int, maxPlayers int, open bool, finished bool, startTime timestamp, stopTime timestamp, connectionType text, connectionDetails text, seedSettings text, roleId int, voiceChannelId int, textChannelId int)")
     conn.query("INSERT INTO worlds (gameId) VALUES (999)")
-    conn.query("CREATE TABLE players(gameId int, userId int, playerNum int, isCreator bool)")
+    conn.query("CREATE TABLE players(gameId int, userId int, playerNum int, isCreator bool, isFinished bool, finishTime timestamp DEFAULT NULL)")
     try:
         category = await guild.create_category_channel("Multiworlds")
         conn.queryWithValues("INSERT INTO settings VALUES('categoryId', ?)", (category.id, ))
@@ -91,4 +92,4 @@ async def on_guild_join(guild):
     conn.queryWithValues("INSERT INTO guilds VALUES(?, ?, ?, ?, ?, ?)", (guild.id, guild.name, guild.owner_id, guild.owner.name, guild.large, guild.member_count))
 
 # Run the bot
-bot.run('NTY0MjgwNzQxNTQ3MDgxNzI5.XKllnQ.b_gY9oJdf2TRilmh6kAIwP4v8Qk', bot=True, reconnect=True)
+bot.run('', bot=True, reconnect=True)

@@ -17,15 +17,15 @@ class PlannerCog(commands.Cog):
     @commands.command(name="finish", aliases=["done"])
     async def finish(self, ctx):
         conn = Connection(ctx.guild.id)
-        player = conn.queryWithValues("SELECT * FROM players WHERE userId=?", (ctx.author.id,)).fetchone()
+        player = conn.queryWithValues("SELECT isFinished, gameId FROM players WHERE userId=?", (ctx.author.id,)).fetchone()
         if player == None:
-            await ctx.send("You don't have a Mutliworld in progress {}".format(ctx.author.display_name))
+            await ctx.send("You don't have a Multiworld in progress {}".format(ctx.author.display_name))
             return
-        if player[4] == True:
+        if player[0] == True:
             await ctx.send("You've already finished!")
             return
         try:
-            conn.queryWithValues("UPDATE players SET isFinished=? WHERE userId=?", (True, ctx.author.id))
+            conn.queryWithValues("UPDATE players SET isFinished=?, finishTime=? WHERE userId=?", (True, datetime.datetime.now(), ctx.author.id))
             name = ctx.author.name
             if len(ctx.author.name) + 5 > 30:
                 name = ctx.author.name[:26]
@@ -36,8 +36,19 @@ class PlannerCog(commands.Cog):
             print(traceback.format_exc())
             print(e)
         finally:
-            await ctx.send("Congrats on beating Ganon!")
+            game = conn.queryWithValues('SELECT startTime FROM worlds WHERE gameId=?', (player[1],)).fetchone()
+            await ctx.send("Congrats on beating Ganon! It took you: {}".format(datetime.datetime.now() - game[0]))
 
+    # Start the Multiworld timer
+    @commands.command(name="start", description="Start your Multiworld's timer")
+    async def start(self, ctx):
+        conn = Connection(ctx.guild.id)
+        game = conn.queryWithValues("SELECT roleId FROM worlds WHERE gameOwner=? AND finished=?", (ctx.author.id, False)).fetchone()
+        if game == None:
+            await ctx.send("You don't have a Multiworld in progress {}".format(ctx.author.display_name))
+            return
+        conn.queryWithValues('UPDATE worlds SET startTime=? WHERE gameOwner=? AND finished=?', (datetime.datetime.now(), ctx.author.id, False))
+        await ctx.send('<@&{}> has started! Good luck everyone!'.format(game[0]))
 
     # Stop a Multiworld
     @commands.command(name="stop", aliases=["end"], description="Stop your Multiworld")
@@ -45,7 +56,7 @@ class PlannerCog(commands.Cog):
         conn = Connection(ctx.guild.id)
         game = conn.queryWithValues("SELECT roleId, voiceChannelId, gameId, textChannelId FROM worlds WHERE gameOwner=? AND finished=?", (ctx.author.id, False)).fetchone()
         if game == None:
-            await ctx.send("You don't have a Mutliworld in progress {}".format(ctx.author.display_name))
+            await ctx.send("You don't have a Multiworld in progress {}".format(ctx.author.display_name))
             return
         try:
             role = ctx.guild.get_role(game[0])
@@ -104,7 +115,7 @@ class PlannerCog(commands.Cog):
                 await ctx.send("That Multiworld has reached it's maximum")
                 return
 
-        conn.queryWithValues("INSERT INTO players VALUES (?, ?, ?, ?, ?)", (multiworld, ctx.author.id, playerCount[0]+1, False, False))
+        conn.queryWithValues("INSERT INTO players (gameId, userId, playerNum, isCreator, isFinished) VALUES (?, ?, ?, ?, ?)", (multiworld, ctx.author.id, playerCount[0]+1, False, False))
         role = ctx.guild.get_role(world[3])
         await ctx.author.add_roles(role)
         numCount = 1
@@ -274,8 +285,8 @@ class PlannerCog(commands.Cog):
             return
         msg = "```\n"
         msg += "Multiworld {}\n\n".format(gameId[0])
-        msg += "{:^5}| {:34}\n".format("#", "Player")
-        msg += "{}|{}\n".format("-"*5, "-"*20)
+        msg += "{:^5}| {:34} | {}\n".format("#", "Player", "Total Time")
+        msg += "{}|{}|{}\n".format("-"*5, "-"*36, "-"*16)
         numCount = 1
         if len(players) > 9:
             numCount = 2
@@ -286,13 +297,14 @@ class PlannerCog(commands.Cog):
             if player[4] == False:
                 msg += "{:^5}| {:34}\n".format("{:0{numCount}d}".format(player[2], numCount=numCount), p.name)
             else:
-                msg += "{:^5}| {:34}\n".format("[Fin]", p.name)
+                game = conn.queryWithValues('SELECT startTime FROM worlds WHERE gameId=?', (gameId[0],)).fetchone()
+                msg += "{:^5}| {:34} | {}\n".format("[Fin]", p.name, player[5] - game[0])
         msg += "```"
         await ctx.send(msg)
 
     # List the Multiworlds
     @commands.command(name="list", description="List active Multiworlds on the server")
-    async def list(self, ctx):
+    async def listWorlds(self, ctx):
         conn = Connection(ctx.guild.id)
         worlds = conn.queryWithValues("SELECT gameId, maxPlayers, open, startTime FROM worlds WHERE finished=?", (False,)).fetchall()
         players = conn.query("SELECT gameId, COUNT(gameId) FROM players GROUP BY gameId").fetchall()
@@ -326,13 +338,13 @@ class PlannerCog(commands.Cog):
         msg += "```"
         await ctx.send(msg)
 
-    # List information of a specific Mutliworld
+    # List information of a specific Multiworld
     @commands.command(name="info", description="List information of a specific multiworld")
     async def info(self, ctx):
         conn = Connection(ctx.guild.id)
         player = conn.queryWithValues("SELECT * FROM players WHERE userId=?", (ctx.author.id,)).fetchone()
         if player == None:
-            await ctx.send("You are not in a Mutliworld")
+            await ctx.send("You are not in a Multiworld")
             return
         game = conn.queryWithValues("SELECT * FROM worlds WHERE gameId=?", (player[0],)).fetchone()
         role = ctx.guild.get_role(game[10])
@@ -345,9 +357,9 @@ class PlannerCog(commands.Cog):
         embed.add_field(name="\u200b", value="\u200b", inline=False)
         embed.add_field(name="Game Owner", value=owner.name, inline=False)
         embed.add_field(name="\u200b", value="\u200b", inline=False)
-        embed.add_field(name="Connection Type", value=game[7], inline=True)
-        embed.add_field(name="Connection Info", value=game[8], inline=True)
-        embed.add_field(name="\u200b", value="\u200b", inline=False)
+        # embed.add_field(name="Connection Type", value=game[7], inline=True)
+        # embed.add_field(name="Connection Info", value=game[8], inline=True)
+        # embed.add_field(name="\u200b", value="\u200b", inline=False)
         embed.add_field(name="Seed", value=game[9], inline=False)
         await ctx.send(embed=embed)
 
@@ -395,36 +407,39 @@ class PlannerCog(commands.Cog):
                 return
 
             # Grab connection type and details
-            await ctx.send("""What kind of connection will you be using?
-            ```
-1. Zerotier
-2. Hamachi
-3. Port forward
-4. Other```""")
-            connectionType = await self.bot.wait_for('message', timeout=30.0, check=check)
-            if connectionType.content.lower() in ['1', 'zerotier']:
-                connectionType = "Zerotier"
-                await ctx.send("Provide additional details (Network code and IP)")
-                connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
-                connectionDetails = connectionDetails.content
-            elif connectionType.content.lower() in ['2', 'hamachi']:
-                connectionType = "Hamachi"
-                await ctx.send("Provide additional details (Network code and IP)")
-                connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
-                connectionDetails = connectionDetails.content
-            elif connectionType.content.lower() in ['3', 'port forward']:
-                connectionType = "Port Forward"
-                await ctx.send("Provide additional details (IP)")
-                connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
-                connectionDetails = connectionDetails.content
-            elif connectionType.content.lower() in ['4', 'other']:
-                connectionType = "Other"
-                await ctx.send("Provide additional details")
-                connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
-                connectionDetails = connectionDetails.content
-            else:
-                await ctx.send("No valid option provided\n\nPlanner aborted")
-                return
+#             await ctx.send("""What kind of connection will you be using?
+#             ```
+# 1. Zerotier
+# 2. Hamachi
+# 3. Port forward
+# 4. Other```""")
+#             connectionType = await self.bot.wait_for('message', timeout=30.0, check=check)
+#             if connectionType.content.lower() in ['1', 'zerotier']:
+#                 connectionType = "Zerotier"
+#                 await ctx.send("Provide additional details (Network code and IP)")
+#                 connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
+#                 connectionDetails = connectionDetails.content
+#             elif connectionType.content.lower() in ['2', 'hamachi']:
+#                 connectionType = "Hamachi"
+#                 await ctx.send("Provide additional details (Network code and IP)")
+#                 connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
+#                 connectionDetails = connectionDetails.content
+#             elif connectionType.content.lower() in ['3', 'port forward']:
+#                 connectionType = "Port Forward"
+#                 await ctx.send("Provide additional details (IP)")
+#                 connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
+#                 connectionDetails = connectionDetails.content
+#             elif connectionType.content.lower() in ['4', 'other']:
+#                 connectionType = "Other"
+#                 await ctx.send("Provide additional details")
+#                 connectionDetails = await self.bot.wait_for('message', timeout=30.0, check=check)
+#                 connectionDetails = connectionDetails.content
+#             else:
+#                 await ctx.send("No valid option provided\n\nPlanner aborted")
+#                 return
+
+            connectionType = None
+            connectionDetails = None
 
             # Grab seed settings
             await ctx.send("What seed settings are you planning to use? (Enter the seed string)")
@@ -439,7 +454,7 @@ class PlannerCog(commands.Cog):
             gameId = conn.queryWithValues("SELECT gameId FROM worlds WHERE gameOwner=? AND finished=?", (ctx.author.id, False)).fetchone()[0]
 
             # Add creator to Multiworld
-            conn.queryWithValues("INSERT INTO players VALUES(?, ?, ?, ?, ?)", (gameId, ctx.author.id, 1, True, False))
+            conn.queryWithValues("INSERT INTO players (gameId, userId, playerNum, isCreator, isFinished) VALUES(?, ?, ?, ?, ?)", (gameId, ctx.author.id, 1, True, False))
 
             # Send an all good message
             if (startTime - datetime.datetime.now()).days < 0:

@@ -56,11 +56,11 @@ class AdminCog(commands.Cog):
     # Remove a multiworld in the server
     @commands.command(name="remove")
     @commands.check(is_admin)
-    async def remove(self, ctx, multiworld):
+    async def stop(self, ctx, gameId: int = None):
         conn = Connection(ctx.guild.id)
-        game = conn.queryWithValues("SELECT roleId, voiceChannelId, gameId FROM worlds WHERE gameId=? AND finished=?", (multiworld, False)).fetchone()
+        game = conn.queryWithValues("SELECT roleId, voiceChannelId, gameId, textChannelId FROM worlds WHERE gameId=? AND finished=?", (gameId, False)).fetchone()
         if game == None:
-            await ctx.send("That Multiworld doesn't exist")
+            await ctx.send("That Multiworld doesn't exist {}".format(ctx.author.display_name))
             return
         try:
             role = ctx.guild.get_role(game[0])
@@ -74,6 +74,12 @@ class AdminCog(commands.Cog):
         except Exception as e:
             print(traceback.format_exc())
             print(e)
+        try:
+            textChannel = ctx.guild.get_channel(game[3])
+            await textChannel.delete()
+        except Exception as e:
+            print(traceback.format_exc())
+            print(e)
         players = conn.queryWithValues("SELECT userId FROM players WHERE gameId=?", (game[2],))
         for player in players:
             member = ctx.guild.get_member(player[0])
@@ -83,8 +89,8 @@ class AdminCog(commands.Cog):
                 print(traceback.format_exc())
                 print(e)
         conn.queryWithValues("DELETE FROM players WHERE gameId=?", (game[2],))
-        conn.queryWithValues("UPDATE worlds SET stopTime=?, finished=? WHERE gameId=? AND finished=?", (datetime.datetime.now(), True, game[2], False))
-        await ctx.send("Mutliworld **{}** has been removed by administrator".format(game[2]))
+        conn.queryWithValues("UPDATE worlds SET stopTime=?, finished=? WHERE gameId=? AND finished=?", (datetime.datetime.now(), True, gameId, False))
+        await ctx.send("Multiworld {} has ended".format(gameId))
 
     # Tests that the bot works
     @commands.command(name="ping", description="Make sure MultiWorldBot is working")

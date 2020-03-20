@@ -10,6 +10,7 @@ class HelpCog(commands.Cog):
         type(self).__name__ = 'Help'
         self.userCommands = [
             ['plan', 'Plan a Multiworld'],
+            ['start', 'Start your Multiworld\'s timer (optional)'],
             ['stop', 'Stop your Multiworld'],
             ['close', 'Close your Multiworld to new participants'],
             ['open', 'Open your Multiworld to new participants'],
@@ -24,7 +25,8 @@ class HelpCog(commands.Cog):
         self.extraCommands = [
             ['suggest', 'Leave a suggestion to the bot maker'],
             ['report', 'Something wrong? Report it please'],
-            ['url', 'In case you wanna add this bot to your server']
+            ['url', 'In case you wanna add this bot to your server'],
+            ['listall', 'List all members with a role']
         ]
 
     @commands.command(name="help", description="Show the help info")
