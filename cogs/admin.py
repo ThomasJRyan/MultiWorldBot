@@ -13,7 +13,8 @@ class AdminCog(commands.Cog):
             ['setprefix', 'Sets the command prefix for the server'],
             ['settoggle', 'Sets the role you want to use as a "willing-to-play" toggle'],
             ['remove', 'Remove a Multiworld from the server'],
-            ['ping', 'Ping MultiWorldBot to ensure it\'s working']
+            ['ping', 'Ping MultiWorldBot to ensure it\'s working'],
+            ['addmodrole', 'Select a role that will be automatically added to each multiworld']
         ]
 
     async def is_admin(ctx):
@@ -110,6 +111,21 @@ class AdminCog(commands.Cog):
         else:
             conn.queryWithValues("INSERT INTO settings VALUES(?, ?)", ("prefix", prefix))
             await ctx.send("Prefix set to {}".format(prefix))
+
+    # Allows a server to specify a mod role
+    @commands.command(name="addmodrole", description="Add mod role that will automatically be added to all multiworlds")
+    @commands.check(is_admin)
+    async def addmod(self, ctx, role: discord.Role = None):
+        conn = Connection(ctx.guild.id)
+        if role == None:
+            await ctx.send("You must specify a group role `addmodrole @<role>`")
+            return
+        if len(conn.query("SELECT * FROM settings WHERE parameter = 'mod_role'").fetchall()) >= 1:
+            await ctx.send("Mod role already set, overwriting...")
+            conn.queryWithValues("UPDATE settings SET flag = ? WHERE parameter = 'mod_role'", (role.id, ))
+        else:
+            conn.queryWithValues("INSERT INTO settings VALUES (?, ?)", ("mod_role", role.id))
+        await ctx.send("Mod role set!")
 
 def setup(bot):
     bot.add_cog(AdminCog(bot))

@@ -482,6 +482,12 @@ class PlannerCog(commands.Cog):
                 print(traceback.format_exc())
                 print(e)
 
+            # Add mod role to channels
+            mod_role = None
+            mod_role_id = conn.query("SELECT flag FROM settings WHERE parameter = 'mod_role'").fetchone()
+            if mod_role_id:
+                mod_role = ctx.guild.get_role(mod_role_id[0])
+
             # Permission overwrites
             try:
                 overwrites = {
@@ -489,6 +495,10 @@ class PlannerCog(commands.Cog):
                     ctx.guild.me: discord.PermissionOverwrite(read_messages=True),
                     role: discord.PermissionOverwrite(read_messages=True)
                 }
+                if mod_role:
+                    overwrites.update({
+                        mod_role: discord.PermissionOverwrite(read_messages=True)
+                    })
             except Exception as e:
                 print(traceback.format_exc())
                 print(e)
@@ -506,8 +516,8 @@ class PlannerCog(commands.Cog):
                     overwrites=overwrites
                 )
                 conn.queryWithValues("UPDATE worlds SET voiceChannelId=? WHERE gameId=?", (voiceChannel.id, gameId))
-            except:
-                pass
+            except Exception as e:
+                print(e)
 
             # Add text channel
             try:
@@ -521,8 +531,8 @@ class PlannerCog(commands.Cog):
                     overwrites=overwrites
                 )
                 conn.queryWithValues("UPDATE worlds SET textChannelId=? WHERE gameId=?", (textChannel.id, gameId))
-            except:
-                pass
+            except Exception as e:
+                print(e)
 
 
         except asyncio.TimeoutError:

@@ -34,13 +34,20 @@ cogs = [
 def global_check(ctx):
     return ctx.message.author.bot == False
 
+# Intents
+intents = discord.Intents.default()
+intents.members = True
+intents.presences = True
+
 # Create the bot
 bot = commands.Bot(
     command_prefix=get_prefix,
     owner_id=160941453671923722,
     description=description,
     # activity=discord.Game("Preparing the Multiworld")
-    activity=discord.Game("Use ~help for commands")
+    activity=discord.Game("Use ~help for commands"),
+    guild_subscriptions=True,
+    intents=intents
 )
 
 # Start the show
